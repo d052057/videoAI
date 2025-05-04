@@ -1,0 +1,43 @@
+.video-container {
+  position: relative;
+  background-color: #000;
+
+  video {
+    display: block;
+    max-height: 70vh;
+    cursor: pointer;
+  }
+
+  .video-controls {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 10;
+
+    .volume-control {
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  &:hover .video-controls {
+    opacity: 1;
+  }
+}
+
+// Fullscreen styles
+:host-context([fullscreen]) {
+  .video-container {
+    width: 100%;
+    height: 100%;
+
+    video {
+      max-height: 100%;
+    }
+  }
+}
