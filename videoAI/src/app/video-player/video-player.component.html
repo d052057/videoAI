@@ -7,28 +7,49 @@
           <div class="video-container">
             <video #videoPlayer class="w-100" (click)="togglePlay()">
               <source [src]="currentVideo.src" [type]="currentVideo.type">
-              <track *ngFor="let track of currentVideo.tracks"
-                     [src]="track.src"
-                     [kind]="track.kind"
-                     [srclang]="track.srclang"
-                     [label]="track.label"
-                     [default]="track.default">
-              Your browser does not support HTML5 video.
+              <!-- Only render tracks if they exist -->
+              <ng-container *ngIf="currentVideo.tracks">
+                <track *ngFor="let track of currentVideo.tracks"
+                       [src]="track.src"
+                       [kind]="track.kind"
+                       [srclang]="track.srclang"
+                       [label]="track.label"
+                       [default]="track.default">
+              </ng-container>
             </video>
-
             <!-- Custom Controls -->
             <div class="video-controls bg-dark p-2">
               <!-- Play/Pause Button -->
-              <button class="btn btn-sm btn-outline-light me-2" (click)="togglePlay()">
+              <button class="btn btn-sm btn-dark me-2" (click)="togglePlay()">
                 <i class="bi" [ngClass]="{'bi-play-fill': !isPlaying, 'bi-pause-fill': isPlaying}"></i>
               </button>
 
               <!-- Progress Bar -->
-              <div class="progress flex-grow-1 mx-2" style="height: 5px; cursor: pointer;">
-                <div class="progress-bar bg-danger" role="progressbar"
-                     [style.width]="(currentTime / duration * 100) + '%'"
-                     (click)="seek($event)"></div>
+              <div #progressContainer
+                   class="progress flex-grow-1 mx-2 position-relative"
+                   style="height: 5px; cursor: pointer;"
+                   (click)="seek($event)"
+                   (mousemove)="showTooltip($event)"
+                   (mouseleave)="hideTooltip()">
+
+                <div class="progress-bar bg-danger"
+                     role="progressbar"
+                     aria-valuemin="0" aria-valuemax="100"
+                     [style.width.%]="(currentTime / duration * 100)">
+                </div>
+
+                <!-- Tooltip positioned absolutely based on mouse -->
+                <div *ngIf="showHoverTime"
+                     class="position-fixed bg-dark text-white px-2 py-1 rounded small"
+                     [style.left.px]="tooltipGlobalX"
+                     [style.top.px]="tooltipGlobalY"
+                     style="transform: translateX(-50%); pointer-events: none; white-space: nowrap; z-index: 1000;">
+                  {{ hoverTimeDisplay }}
+                </div>
               </div>
+
+
+
 
               <!-- Time Display -->
               <div class="text-white mx-2 small">
@@ -37,7 +58,7 @@
 
               <!-- Volume Control -->
               <div class="volume-control me-2">
-                <button class="btn btn-sm btn-outline-light" (click)="toggleMute()">
+                <button class="btn btn-sm btn-dark" (click)="toggleMute()">
                   <i class="bi" [ngClass]="{'bi-volume-up-fill': !isMuted, 'bi-volume-mute-fill': isMuted}"></i>
                 </button>
                 <input type="range" class="form-range" min="0" max="1" step="0.1"
@@ -45,36 +66,84 @@
               </div>
 
               <!-- Playback Speed -->
-              <select class="form-select form-select-sm me-2" style="width: auto;"
-                      [(ngModel)]="playbackRate" (change)="setPlaybackRate()">
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1" selected>1x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2">2x</option>
-              </select>
+              <div class="dropdown">
+                <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+                        #speedToggleBtn
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        title="Speed">
+                  <i class="bi bi-speedometer2"></i>
+                </button>
+                <ul class="dropdown-menu">
+                  <li *ngFor="let s of speed">
+                    <a class="dropdown-item" (click)="setPlaybackRate(s)">
+                      {{s}}x
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <!-- Audio Language -->
+              <div class="dropdown">
+                <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+                        #speedToggleBtn
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        title="language audio">
+                  <i class="bi bi-translate"></i>
+                </button>
+                <ul class="dropdown-menu" *ngIf="hasMultipleAudioTracks">
+                  <li *ngFor="let audio of availableAudioTracks">
+                    <a class="dropdown-item" (click)="changeAudioLanguage(audio.srclang)">
+                      {{audio.label}}
+                    </a>
+                  </li>
+                </ul>
+              </div>
 
-              <!-- Captions -->
-              <select class="form-select form-select-sm me-2" style="width: auto;"
-                      (change)="toggleCaptions($event)">
-                <option value="off">Captions Off</option>
-                <option *ngFor="let track of currentVideo.tracks" [value]="track.srclang">
-                  {{ track.label }}
-                </option>
-              </select>
+              <!-- Captions Toggle Button -->
+              <div class="dropdown">
+                <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+                        #ccToggleBtn
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        title="Closed Captions">
+                  <i class="bi bi-badge-cc-fill"></i>
+                </button>
+                <ul class="dropdown-menu">
+                  <li>
+                    <a class="dropdown-item" (click)="toggleCaptions('off', $event)">Captions Off</a>
+                  </li>
+                  <li *ngFor="let track of currentVideo.tracks">
+                    <a class="dropdown-item" (click)="toggleCaptions(track.srclang, $event)">
+                      {{ track.label }}
+                    </a>
+                  </li>
+                </ul>
+              </div>
 
               <!-- Chapters -->
-              <select class="form-select form-select-sm me-2" style="width: auto;"
-                      (change)="jumpToChapter($event)">
-                <option value="">Chapters</option>
-                <option *ngFor="let chapter of chapters" [value]="chapter.time">
-                  {{ chapter.title }} ({{ formatTime(chapter.time) }})
-                </option>
-              </select>
-
+              <div class="dropdown">
+                <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+                        #chapterBtn
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        title="chapter">
+                  <i class="bi bi-skip-forward"></i>
+                </button>
+                <ul class="dropdown-menu">
+                  <li *ngFor="let chapter of chapters">
+                    <a class="dropdown-item" (click)="jumpToChapter(chapter.time)">
+                      {{ chapter.title }} ({{ formatTime(chapter.time) }})
+                    </a>
+                  </li>
+                </ul>
+              </div>
               <!-- Fullscreen -->
-              <button class="btn btn-sm btn-outline-light" (click)="toggleFullscreen()">
+              <button class="btn btn-sm btn-dark" (click)="toggleFullscreen()">
                 <i class="bi bi-fullscreen"></i>
               </button>
             </div>

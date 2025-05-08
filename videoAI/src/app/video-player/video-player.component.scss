@@ -41,3 +41,22 @@
     }
   }
 }
+.progress-container {
+  height: 5px;
+  background: rgba(100, 100, 100, 0.5);
+  cursor: pointer;
+  position: relative;
+  width: 100%;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #f00;
+  pointer-events: none;
+}
+/* Optional small icon button tweaks */
+.btn-light.dropdown-toggle {
+  background-color: transparent;
+  border: none;
+  font-size: 1.25rem;
+}
