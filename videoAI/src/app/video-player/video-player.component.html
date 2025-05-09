@@ -35,40 +35,20 @@
               <button class="btn btn-sm btn-dark me-2" (click)="togglePlay()">
                 <i class="bi" [ngClass]="{'bi-play-fill': !isPlaying, 'bi-pause-fill': isPlaying}"></i>
               </button>
-
+              <ng-template #tooltipContainer></ng-template>
               <!-- Progress Bar -->
               <div #progressContainer
                    class="progress flex-grow-1 mx-2 position-relative"
                    style="height: 5px; cursor: pointer;"
                    (click)="seek($event)"
-                   [progressTooltip]
+                   [progressTooltip]="true"
                    [duration]="duration"
-                   [videoElement]="videoPlayerRef"
+                   [videoElement]="video"
                    [canvasElement]="thumbCanvas">
                 <div class="progress-bar bg-danger"
                      [style.width.%]="(currentTime / duration * 100)">
                 </div>
-                <ng-template #tooltipContainer></ng-template>
-                <div class="progress-bar bg-danger"
-                     role="progressbar"
-                     aria-valuemin="0" aria-valuemax="100"
-                     [style.width.%]="(currentTime / duration * 100)">
-                </div>
-
-                <!-- Tooltip positioned absolutely based on mouse -->
-                <div *ngIf="showHoverTime"
-                     class="position-fixed bg-dark text-white px-2 py-1 rounded small"
-                     [style.left.px]="tooltipGlobalX"
-                     [style.top.px]="tooltipGlobalY"
-                     style="transform: translateX(-50%); pointer-events: none; white-space: nowrap; z-index: 1000;">
-                  {{ hoverTimeDisplay }}
-                </div>
               </div>
-              <!--Time Display-->
-              <div class="text-white mx-2 small">
-                {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
-              </div>
-
               <!-- Volume Control -->
               <div class="volume-control me-2">
                 <button class="btn btn-sm btn-dark" (click)="toggleMute()">

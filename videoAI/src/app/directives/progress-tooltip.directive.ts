@@ -18,7 +18,7 @@ export class ProgressTooltipDirective {
 
   private readonly el = inject(ElementRef<HTMLElement>);
   private readonly vcr = inject(ViewContainerRef);
-  @Input() progressTooltip: any;
+  @Input('progressTooltip') progressTooltip: any;
   @Input() duration = 0;
   @Input() videoElement!: HTMLVideoElement;
   @Input() canvasElement!: HTMLCanvasElement;
@@ -44,7 +44,7 @@ export class ProgressTooltipDirective {
 
     this.drawThumbnail(hoverTime);
     this.canvasElement.style.left = `${event.clientX}px`;
-    this.canvasElement.style.top = `${event.clientY - 100}px`;
+    this.canvasElement.style.top = `${event.clientY - 130}px`;
     this.canvasElement.style.display = 'block';
   }
 

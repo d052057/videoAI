@@ -18,7 +18,9 @@ declare const bootstrap: any;
 export class VideoPlayerComponent implements OnInit {
   audioSync = inject(VideoAudioSyncService);
   readonly videoPlayer = viewChild.required<ElementRef<HTMLVideoElement>>('videoPlayer');
-  videoPlayerRef!: any;
+  get video(): HTMLVideoElement {
+    return this.videoPlayer().nativeElement;
+  }
   readonly ccToggleBtnRef = viewChild.required<ElementRef<HTMLDivElement>>('ccToggleBtn');
   private ccDropdownInstance: any;
 
@@ -141,9 +143,6 @@ export class VideoPlayerComponent implements OnInit {
     this.loadVideo();
   }
   ngAfterViewInit() {
-    if (this.videoPlayer().nativeElement) {
-      this.videoPlayerRef = this.videoPlayer().nativeElement;
-    }
 
     if (this.ccToggleBtnRef().nativeElement) {
       this.ccDropdownInstance = new bootstrap.Dropdown(this.ccToggleBtnRef().nativeElement);
@@ -235,14 +234,14 @@ export class VideoPlayerComponent implements OnInit {
     const rect = this.progressRef().nativeElement.getBoundingClientRect();
     const pos = (event.clientX - rect.left) / rect.width;
     this.videoPlayer().nativeElement.currentTime = pos * this.videoPlayer().nativeElement.duration;
+    this.currentTime = this.videoPlayer().nativeElement.currentTime;
   }
 
   toggleCaptions(lang: string, event?: Event): void {
-    const video = this.videoPlayer().nativeElement;
-    if (!video || !video.textTracks) return;
+    if (!this.video || !this.video.textTracks) return;
 
-    for (let i = 0; i < video.textTracks.length; i++) {
-      const track = video.textTracks[i];
+    for (let i = 0; i < this.video.textTracks.length; i++) {
+      const track = this.video.textTracks[i];
       track.mode = (track.language === lang && lang !== 'off') ? 'showing' : 'disabled';
     }
 
@@ -251,17 +250,15 @@ export class VideoPlayerComponent implements OnInit {
   }
 
   enableCaptions(lang: string): void {
-    const video = this.videoPlayer().nativeElement;
-    for (let i = 0; i < video.textTracks.length; i++) {
-      const track = video.textTracks[i];
+    for (let i = 0; i < this.video.textTracks.length; i++) {
+      const track = this.video.textTracks[i];
       track.mode = track.language === lang ? 'showing' : 'hidden';
     }
   }
 
   disableCaptions(): void {
-    const video = this.videoPlayer().nativeElement;
-    for (let i = 0; i < video.textTracks.length; i++) {
-      video.textTracks[i].mode = 'hidden';
+    for (let i = 0; i < this.video.textTracks.length; i++) {
+      this.video.textTracks[i].mode = 'hidden';
     }
   }
 
@@ -303,15 +300,14 @@ export class VideoPlayerComponent implements OnInit {
   }
 
   // Update current time and duration
-  onTimeUpdate(): void {
-    this.currentTime = this.videoPlayer().nativeElement.currentTime;
-    this.duration = this.videoPlayer().nativeElement.duration || 0;
-  }
+  //onTimeUpdate(): void {
+  //  this.currentTime = this.videoPlayer().nativeElement.currentTime;
+  //  this.duration = this.videoPlayer().nativeElement.duration || 0;
+  //}
 
   // Handle keyboard shortcuts
   @HostListener('window:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent): void {
-    const video = this.videoPlayer().nativeElement;
 
     switch (event.key) {
       case ' ':
@@ -326,10 +322,10 @@ export class VideoPlayerComponent implements OnInit {
         this.toggleFullscreen();
         break;
       case 'ArrowLeft':
-        video.currentTime = Math.max(0, video.currentTime - 5);
+        this.video.currentTime = Math.max(0, this.video.currentTime - 5);
         break;
       case 'ArrowRight':
-        video.currentTime = Math.min(video.duration, video.currentTime + 5);
+        this.video.currentTime = Math.min(this.video.duration, this.video.currentTime + 5);
         break;
       case 'ArrowUp':
         this.volume = Math.min(1, this.volume + 0.1);
@@ -373,9 +369,8 @@ export class VideoPlayerComponent implements OnInit {
   // Call this when changing videos
   resetCaptionState(): void {
     this.selectedCaptionLanguage = 'off';
-    const video = this.videoPlayer().nativeElement;
-    if (video.textTracks) {
-      Array.from(video.textTracks).forEach(track => {
+    if (this.video.textTracks) {
+      Array.from(this.video.textTracks).forEach(track => {
         track.mode = 'hidden';
       });
     }
@@ -392,10 +387,9 @@ export class VideoPlayerComponent implements OnInit {
   }
 
   get activeCaptionLanguage(): string | null {
-    const video = this.videoPlayer().nativeElement;
-    for (let i = 0; i < video.textTracks.length; i++) {
-      if (video.textTracks[i].mode === 'showing') {
-        return video.textTracks[i].language;
+    for (let i = 0; i < this.video.textTracks.length; i++) {
+      if (this.video.textTracks[i].mode === 'showing') {
+        return this.video.textTracks[i].language;
       }
     }
     return null;
@@ -411,53 +405,8 @@ export class VideoPlayerComponent implements OnInit {
   hideTooltip() {
     this.tooltipContainer.clear();
   }
-  //showTooltip(event: MouseEvent): void {
-  //  const rect = this.progressRef().nativeElement.getBoundingClientRect();
-  //  const pos = (event.clientX - rect.left) / rect.width;
-  //  const hoverTime = pos * this.duration;
-
-  //  this.tooltipGlobalX = event.clientX;
-  //  this.tooltipGlobalY = event.clientY - 30; // 30px above the cursor
-  //  this.hoverTimeDisplay = this.formatTime(hoverTime);
-  //  this.seekThumbnail(hoverTime);
-  //  this.showHoverTime = true;
-  //}
-
-  //hideTooltip(): void {
-  //  this.showHoverTime = false;
-  //}
-
-  seekThumbnail(time: number): void {
-    const thumbVideo = this.thumbVideoRef().nativeElement;
-
-    // Avoid unnecessary seeks
-    if (Math.abs(thumbVideo.currentTime - time) > 0.1) {
-      thumbVideo.currentTime = time;
-
-      thumbVideo.onseeked = () => {
-        this.drawThumbnail(thumbVideo);
-      };
-    } else {
-      this.drawThumbnail(thumbVideo);
-    }
-  }
-
-  drawThumbnail(video: HTMLVideoElement): void {
-    const canvas = this.canvasRef()?.nativeElement;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Clear the previous thumbnail
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw the new frame from the video on the canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-    } else {
-      console.warn('Canvas reference is not available');
-    }
-  }
   onEnded = () => {
     // handle video ended
   }
+
 }
