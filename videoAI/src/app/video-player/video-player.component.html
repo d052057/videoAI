@@ -137,7 +137,8 @@
               </div>
               <!-- Fullscreen -->
               <button class="btn btn-sm btn-dark" (click)="toggleFullscreen()">
-                <i class="bi bi-fullscreen"></i>
+                <i class="bi bi-fullscreen" *ngIf="isFullscreen"></i>
+                <i class="bi bi-fullscreen-exit" *ngIf="!isFullscreen"></i>
               </button>
             </div>
           </div>
