@@ -3,7 +3,8 @@ import { Component, ElementRef, HostListener, inject, OnInit, ViewChild, viewChi
 import { FormsModule } from '@angular/forms';
 import { AudioTrack, Chapter, speed_array, SubtitleCue, VideoSource, VideoTrack } from '../models/video.model';
 import { fadeInOut } from '../services/animations';
-import { VideoAudioSyncService } from '../services/video.service';
+//import { VideoAudioSyncService } from '../services/video.service';
+import { EventListenerService } from '../services/event-handler.service';
 import { VideoAudioSyncDirective } from '../directives/video-audio-sync.directive';
 import { ProgressTooltipDirective } from '../directives/progress-tooltip.directive';
 import { TooltipComponent } from '../tooltip/tooltip.component';
@@ -16,7 +17,8 @@ declare const bootstrap: any;
   animations: [fadeInOut],
 })
 export class VideoPlayerComponent implements OnInit {
-  audioSync = inject(VideoAudioSyncService);
+  /*audioSync = inject(VideoAudioSyncService);*/
+  eventListenerService = inject(EventListenerService);
   readonly videoPlayer = viewChild.required<ElementRef<HTMLVideoElement>>('videoPlayer');
   get video(): HTMLVideoElement {
     return this.videoPlayer().nativeElement;
@@ -39,7 +41,6 @@ export class VideoPlayerComponent implements OnInit {
   readonly externalAudioRef = viewChild.required<ElementRef<HTMLVideoElement>>('externalAudio');
 
   /*directive version*/
- /* @ViewChild(VideoAudioSyncDirective) syncDirective!: VideoAudioSyncDirective;*/
   readonly syncDirective = viewChild(VideoAudioSyncDirective);
 
   @ViewChild('tooltipContainer', { read: ViewContainerRef })
@@ -136,43 +137,31 @@ export class VideoPlayerComponent implements OnInit {
 
   tooltipGlobalX = 0;
   tooltipGlobalY = 0;
-  hoverTimeDisplay = '';
   speed = speed_array;
-  showHoverTime = false;
+  constructor() {
+    this.eventListenerService.registerKeyboardHandler(this.handleKeyboardEvent.bind(this));
+  }
   ngOnInit(): void {
     this.loadVideo();
   }
   ngAfterViewInit() {
-
-    if (this.ccToggleBtnRef().nativeElement) {
-      this.ccDropdownInstance = new bootstrap.Dropdown(this.ccToggleBtnRef().nativeElement);
-    }
-
-    if (this.progressRef().nativeElement) {
-      this.ccProgressInstance = new bootstrap.Dropdown(this.progressRef().nativeElement);
-    }
-
-    if (this.speedToggleBtnRef().nativeElement) {
-      this.speedToggleInstance = new bootstrap.Dropdown(this.speedToggleBtnRef().nativeElement);
-    }
-
-    if (this.chapterBtnRef().nativeElement) {
-      this.chapterInstance = new bootstrap.Dropdown(this.chapterBtnRef().nativeElement);
-    }
-    this.videoPlayer().nativeElement.addEventListener('timeupdate', () => {
-      this.currentTime = this.videoPlayer().nativeElement.currentTime;
-    });
-
-    this.videoPlayer().nativeElement.addEventListener('loadedmetadata', () => {
-      this.duration = this.videoPlayer().nativeElement.duration;
-    });
-
-    this.videoPlayer().nativeElement.addEventListener('ended', this.onEnded);
-
+    this.bootstrapHouseKeeper();
+    this.eventListenerService.registerHandler(this.video, 'timeupdate', this.onTimeUpdate);
+    this.eventListenerService.registerHandler(this.video, 'loadedmetadata', this.onLoadedMetadata);
+    this.eventListenerService.registerHandler(this.video, 'ended', this.onEnded);
+ 
     //this.audioSync.init(
     //  this.videoPlayer().nativeElement,
     //  this.externalAudioRef().nativeElement
     //);
+  }
+  ngOnDestroy(): void {
+    //this.destroy$.next();
+    //this.destroy$.complete();
+
+    if (this.videoPlayer()) {
+      this.eventListenerService.unregisterAll();
+    }
   }
   loadVideo(): void {
     this.videoPlayer().nativeElement.load();
@@ -187,6 +176,16 @@ export class VideoPlayerComponent implements OnInit {
         this.enableCaptions(defaultTrack.srclang);
       }
     }
+  }
+  onTimeUpdate = (): void => {
+    this.currentTime = this.videoPlayer().nativeElement.currentTime;
+  }
+  onLoadedMetadata = (): void => {
+    this.duration = this.videoPlayer().nativeElement.duration;
+  }
+
+  onEnded = (): void => {
+    // handle video ended
   }
 
   // Add to your changeVideo() method
@@ -306,7 +305,7 @@ export class VideoPlayerComponent implements OnInit {
   //}
 
   // Handle keyboard shortcuts
-  @HostListener('window:keydown', ['$event'])
+  /*@HostListener('window:keydown', ['$event'])*/
   handleKeyboardEvent(event: KeyboardEvent): void {
 
     switch (event.key) {
@@ -405,8 +404,21 @@ export class VideoPlayerComponent implements OnInit {
   hideTooltip() {
     this.tooltipContainer.clear();
   }
-  onEnded = () => {
-    // handle video ended
-  }
+  bootstrapHouseKeeper() {
+    if (this.ccToggleBtnRef().nativeElement) {
+      this.ccDropdownInstance = new bootstrap.Dropdown(this.ccToggleBtnRef().nativeElement);
+    }
 
+    if (this.progressRef().nativeElement) {
+      this.ccProgressInstance = new bootstrap.Dropdown(this.progressRef().nativeElement);
+    }
+
+    if (this.speedToggleBtnRef().nativeElement) {
+      this.speedToggleInstance = new bootstrap.Dropdown(this.speedToggleBtnRef().nativeElement);
+    }
+
+    if (this.chapterBtnRef().nativeElement) {
+      this.chapterInstance = new bootstrap.Dropdown(this.chapterBtnRef().nativeElement);
+    }
+  }
 }
