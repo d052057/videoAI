@@ -1,17 +1,24 @@
 import { NgClass, NgFor, NgIf } from '@angular/common';
-import { Component, ElementRef, HostListener, OnInit, ViewChild, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, OnInit, ViewChild, viewChild, ViewContainerRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AudioTrack, Chapter, speed_array, SubtitleCue, VideoSource, VideoTrack } from '../models/video.model';
+import { fadeInOut } from '../services/animations';
+import { VideoAudioSyncService } from '../services/video.service';
+import { VideoAudioSyncDirective } from '../directives/video-audio-sync.directive';
+import { ProgressTooltipDirective } from '../directives/progress-tooltip.directive';
+import { TooltipComponent } from '../tooltip/tooltip.component';
 declare const bootstrap: any;
 @Component({
   selector: 'app-video-player',
   templateUrl: './video-player.component.html',
-  imports: [NgFor, FormsModule, NgClass, NgIf],
-  styleUrls: ['./video-player.component.scss']
+  imports: [ProgressTooltipDirective, NgFor, FormsModule, NgClass, NgIf, VideoAudioSyncDirective],
+  styleUrls: ['./video-player.component.scss', 'captions.scss'],
+  animations: [fadeInOut],
 })
 export class VideoPlayerComponent implements OnInit {
+  audioSync = inject(VideoAudioSyncService);
   readonly videoPlayer = viewChild.required<ElementRef<HTMLVideoElement>>('videoPlayer');
-
+  videoPlayerRef!: any;
   readonly ccToggleBtnRef = viewChild.required<ElementRef<HTMLDivElement>>('ccToggleBtn');
   private ccDropdownInstance: any;
 
@@ -24,44 +31,20 @@ export class VideoPlayerComponent implements OnInit {
   readonly chapterBtnRef = viewChild.required<ElementRef<HTMLDivElement>>('chapterBtn');
   private chapterInstance: any;
 
+  readonly thumbVideoRef = viewChild.required<ElementRef<HTMLVideoElement>>('thumbVideo');
+  readonly canvasRef = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
+  /*service version*/
+  readonly externalAudioRef = viewChild.required<ElementRef<HTMLVideoElement>>('externalAudio');
+
+  /*directive version*/
+ /* @ViewChild(VideoAudioSyncDirective) syncDirective!: VideoAudioSyncDirective;*/
+  readonly syncDirective = viewChild(VideoAudioSyncDirective);
+
+  @ViewChild('tooltipContainer', { read: ViewContainerRef })
+  tooltipContainer!: ViewContainerRef;
+  private tooltipRef: any;
   // Video Library
   videoLibrary: VideoSource[] = [
-    {
-      title: 'David Blaine',
-      src: 'assets/videos/David Blaine.mp4',
-      type: 'video/mp4',
-      hasCaptions: true,
-      audioTracks: [
-        {
-          src: 'assets/audio/sample1-en.mp3',
-          kind: 'audio',
-          srclang: 'en',
-          label: 'English',
-          default: true
-        },
-        {
-          src: 'assets/audio/sample1-es.mp3',
-          kind: 'audio',
-          srclang: 'es',
-          label: 'Spanish'
-        }
-      ],
-      tracks: [
-        {
-          src: 'assets/subtitles/David Blaine-en.vtt',
-          kind: 'subtitles',
-          srclang: 'en',
-          label: 'English',
-          default: true
-        },
-        {
-          src: 'assets/subtitlesDavid Blaine-km.vtt',
-          kind: 'subtitles',
-          srclang: 'km',
-          label: 'Khmer'
-        }
-      ]
-    },
     {
       title: 'Return of the Condor Heroes',
       src: 'assets/videos/Return of the Condor Heroes.mp4',
@@ -91,7 +74,44 @@ export class VideoPlayerComponent implements OnInit {
           default: true
         }
       ]
+    },
+    {
+      title: 'David Blaine',
+      src: 'assets/videos/David Blaine.mp4',
+      type: 'video/mp4',
+      hasCaptions: true,
+      audioTracks: [
+        {
+          src: 'assets/audio/sample1-en.mp3',
+          kind: 'audio',
+          srclang: 'en',
+          label: 'English',
+          default: true
+        },
+        {
+          src: 'assets/audio/sample1-es.mp3',
+          kind: 'audio',
+          srclang: 'es',
+          label: 'Spanish'
+        }
+      ],
+      tracks: [
+        {
+          src: 'assets/subtitles/David Blaine-en.vtt',
+          kind: 'subtitles',
+          srclang: 'en',
+          label: 'English',
+          default: true
+        },
+        {
+          src: 'assets/subtitles/David Blaine-km.vtt',
+          kind: 'subtitles',
+          srclang: 'km',
+          label: 'Khmer'
+        }
+      ]
     }
+ 
   ];
 
   // Chapters for the current video
@@ -112,22 +132,18 @@ export class VideoPlayerComponent implements OnInit {
   isFullscreen = false;
   selectedCaptionLanguage: string = 'off';
 
-  showHoverTime = false;
   tooltipGlobalX = 0;
   tooltipGlobalY = 0;
   hoverTimeDisplay = '';
   speed = speed_array;
+  showHoverTime = false;
   ngOnInit(): void {
     this.loadVideo();
   }
   ngAfterViewInit() {
-    this.videoPlayer().nativeElement.addEventListener('timeupdate', () => {
-      this.currentTime = this.videoPlayer().nativeElement.currentTime;
-    });
-
-    this.videoPlayer().nativeElement.addEventListener('loadedmetadata', () => {
-      this.duration = this.videoPlayer().nativeElement.duration;
-    });
+    if (this.videoPlayer().nativeElement) {
+      this.videoPlayerRef = this.videoPlayer().nativeElement;
+    }
 
     if (this.ccToggleBtnRef().nativeElement) {
       this.ccDropdownInstance = new bootstrap.Dropdown(this.ccToggleBtnRef().nativeElement);
@@ -144,13 +160,26 @@ export class VideoPlayerComponent implements OnInit {
     if (this.chapterBtnRef().nativeElement) {
       this.chapterInstance = new bootstrap.Dropdown(this.chapterBtnRef().nativeElement);
     }
-    this.setupTextTracks();
+    this.videoPlayer().nativeElement.addEventListener('timeupdate', () => {
+      this.currentTime = this.videoPlayer().nativeElement.currentTime;
+    });
+
+    this.videoPlayer().nativeElement.addEventListener('loadedmetadata', () => {
+      this.duration = this.videoPlayer().nativeElement.duration;
+    });
+
+    this.videoPlayer().nativeElement.addEventListener('ended', this.onEnded);
+
+    //this.audioSync.init(
+    //  this.videoPlayer().nativeElement,
+    //  this.externalAudioRef().nativeElement
+    //);
   }
   loadVideo(): void {
-    const video = this.videoPlayer().nativeElement;
-    video.load();
-    video.volume = this.volume;
-    video.playbackRate = 1;
+    this.videoPlayer().nativeElement.load();
+    this.thumbVideoRef().nativeElement.load();
+    this.videoPlayer().nativeElement.volume = this.volume;
+    this.videoPlayer().nativeElement.playbackRate = 1;
 
     // Enable captions if available
     if (this.currentVideo.tracks && this.currentVideo.tracks.length > 0) {
@@ -209,7 +238,7 @@ export class VideoPlayerComponent implements OnInit {
   }
 
   toggleCaptions(lang: string, event?: Event): void {
-    const video: HTMLVideoElement | null = document.querySelector('video');
+    const video = this.videoPlayer().nativeElement;
     if (!video || !video.textTracks) return;
 
     for (let i = 0; i < video.textTracks.length; i++) {
@@ -312,32 +341,26 @@ export class VideoPlayerComponent implements OnInit {
         break;
     }
   }
-  async changeAudioLanguage(lang:string): Promise<void> {
+  /*service version*/
+  //async changeAudioLanguage(lang: string): Promise<void> {
+  //  const audioTrack = this.currentVideo.audioTracks?.find(a => a.srclang === lang);
 
-    const currentTime = this.videoPlayer().nativeElement.currentTime;
-    const isPlaying = !this.videoPlayer().nativeElement.paused;
-
-    // Find the audio track
+  //  if (audioTrack) {
+  //    await this.audioSync.switchToExternalAudio(audioTrack.src);
+  //  } else {
+  //    this.audioSync.switchToVideoAudio();
+  //  }
+  //}
+  /*directive version*/
+  async changeAudioLanguage(lang: string) {
     const audioTrack = this.currentVideo.audioTracks?.find(a => a.srclang === lang);
-    if (!audioTrack) return;
-
-    // Pause video
-    this.pause();
-
-    // Change source (this requires separate audio files)
-    this.videoPlayer().nativeElement.src = audioTrack.src;
-
-    // Wait for the new source to load
-    await new Promise(resolve => {
-      this.videoPlayer().nativeElement.addEventListener('loadedmetadata', resolve, { once: true });
-    });
-
-    // Restore playback position
-    this.videoPlayer().nativeElement.currentTime = currentTime;
-
-    // Resume playback if it was playing
-    if (isPlaying) {
-      this.play();
+    const sync = this.syncDirective();
+    if (sync) {
+      if (audioTrack) {
+        await sync.switchToExternalAudio(audioTrack.src);
+      } else {
+        sync.switchToVideoAudio();
+      }
     }
   }
   get availableAudioTracks(): AudioTrack[] {
@@ -345,29 +368,6 @@ export class VideoPlayerComponent implements OnInit {
   }
   get hasMultipleAudioTracks(): boolean {
     return this.availableAudioTracks.length > 1;
-  }
-  private setupTextTracks(): void {
-    const video = this.videoPlayer().nativeElement;
-
-    // Wait for tracks to load
-    video.addEventListener('loadedmetadata', () => {
-      // Set default caption if specified
-      const defaultTrack = this.availableCaptionTracks.find(t => t.default);
-      if (defaultTrack) {
-        this.selectedCaptionLanguage = defaultTrack.srclang;
-        /*this.changeCaptionLanguage();*/
-      }
-
-      // Handle track errors
-      Array.from(video.textTracks).forEach(track => {
-        track.addEventListener('error', () => {
-          console.warn(`Caption track failed: ${track.label}`);
-          if (this.selectedCaptionLanguage === track.language) {
-            this.selectedCaptionLanguage = 'off';
-          }
-        });
-      });
-    });
   }
 
   // Call this when changing videos
@@ -400,38 +400,64 @@ export class VideoPlayerComponent implements OnInit {
     }
     return null;
   }
-  // In your component.ts
-  setCaption(lang: string) {
-    const video: HTMLVideoElement | null = document.querySelector('video');
-    if (!video || !video.textTracks) return;
+  showTooltip(x: number, y: number, timeDisplay: string) {
+    this.tooltipContainer.clear(); // Remove previous one
+    this.tooltipRef = this.tooltipContainer.createComponent(TooltipComponent);
+    this.tooltipRef.setInput('x', x);
+    this.tooltipRef.setInput('y', y);
+    this.tooltipRef.setInput('timeDisplay', timeDisplay);
+  }
 
-    // Enable selected track or disable all
-    for (let i = 0; i < video.textTracks.length; i++) {
-      const track = video.textTracks[i];
-      track.mode = (track.language === lang && lang !== 'off') ? 'showing' : 'disabled';
+  hideTooltip() {
+    this.tooltipContainer.clear();
+  }
+  //showTooltip(event: MouseEvent): void {
+  //  const rect = this.progressRef().nativeElement.getBoundingClientRect();
+  //  const pos = (event.clientX - rect.left) / rect.width;
+  //  const hoverTime = pos * this.duration;
+
+  //  this.tooltipGlobalX = event.clientX;
+  //  this.tooltipGlobalY = event.clientY - 30; // 30px above the cursor
+  //  this.hoverTimeDisplay = this.formatTime(hoverTime);
+  //  this.seekThumbnail(hoverTime);
+  //  this.showHoverTime = true;
+  //}
+
+  //hideTooltip(): void {
+  //  this.showHoverTime = false;
+  //}
+
+  seekThumbnail(time: number): void {
+    const thumbVideo = this.thumbVideoRef().nativeElement;
+
+    // Avoid unnecessary seeks
+    if (Math.abs(thumbVideo.currentTime - time) > 0.1) {
+      thumbVideo.currentTime = time;
+
+      thumbVideo.onseeked = () => {
+        this.drawThumbnail(thumbVideo);
+      };
+    } else {
+      this.drawThumbnail(thumbVideo);
     }
+  }
 
-    // 🔽 Auto-close the dropdown
-    const dropdownElement = document.querySelector('.dropdown-toggle');
-    if (dropdownElement) {
-      const dropdown = bootstrap.Dropdown.getInstance(dropdownElement)
-        || new bootstrap.Dropdown(dropdownElement);
-      dropdown.hide();
+  drawThumbnail(video: HTMLVideoElement): void {
+    const canvas = this.canvasRef()?.nativeElement;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Clear the previous thumbnail
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw the new frame from the video on the canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+    } else {
+      console.warn('Canvas reference is not available');
     }
   }
-  showTooltip(event: MouseEvent): void {
-    const rect = this.progressRef().nativeElement.getBoundingClientRect();
-    const pos = (event.clientX - rect.left) / rect.width;
-    const hoverTime = pos * this.duration;
-
-    this.tooltipGlobalX = event.clientX;
-    this.tooltipGlobalY = event.clientY - 30; // 30px above the cursor
-    this.hoverTimeDisplay = this.formatTime(hoverTime);
-    this.showHoverTime = true;
+  onEnded = () => {
+    // handle video ended
   }
-
-  hideTooltip(): void {
-    this.showHoverTime = false;
-  }
-
 }

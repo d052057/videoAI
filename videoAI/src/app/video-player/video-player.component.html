@@ -4,8 +4,8 @@
       <div class="card">
         <div class="card-body p-0">
           <!-- Video Player -->
-          <div class="video-container">
-            <video #videoPlayer class="w-100" (click)="togglePlay()">
+          <div class="video-container" @fadeInOut>
+            <video #videoPlayer class="w-100" (click)="togglePlay()" >
               <source [src]="currentVideo.src" [type]="currentVideo.type">
               <!-- Only render tracks if they exist -->
               <ng-container *ngIf="currentVideo.tracks">
@@ -17,6 +17,18 @@
                        [default]="track.default">
               </ng-container>
             </video>
+            <!--directive version-->
+            <audio #externalAudio [videoAudioSync]="videoPlayer" preload="auto" style="display: none"></audio>
+            <!--service version-->
+            <!--<audio #externalAudio preload="auto" style="display: none"></audio>-->
+            <!-- Hidden video for preview thumbnails -->
+            <video #thumbVideo [src]="currentVideo.src" preload="auto" muted style="display: none;"></video>
+            <canvas #thumbCanvas
+                    class="position-fixed border rounded shadow"
+                    width="160" height="90"
+                    style="transform: translateX(-50%); pointer-events: none; display: none; z-index: 1000;">
+            </canvas>
+
             <!-- Custom Controls -->
             <div class="video-controls bg-dark p-2">
               <!-- Play/Pause Button -->
@@ -29,9 +41,14 @@
                    class="progress flex-grow-1 mx-2 position-relative"
                    style="height: 5px; cursor: pointer;"
                    (click)="seek($event)"
-                   (mousemove)="showTooltip($event)"
-                   (mouseleave)="hideTooltip()">
-
+                   [progressTooltip]
+                   [duration]="duration"
+                   [videoElement]="videoPlayerRef"
+                   [canvasElement]="thumbCanvas">
+                <div class="progress-bar bg-danger"
+                     [style.width.%]="(currentTime / duration * 100)">
+                </div>
+                <ng-template #tooltipContainer></ng-template>
                 <div class="progress-bar bg-danger"
                      role="progressbar"
                      aria-valuemin="0" aria-valuemax="100"
@@ -47,11 +64,7 @@
                   {{ hoverTimeDisplay }}
                 </div>
               </div>
-
-
-
-
-              <!-- Time Display -->
+              <!--Time Display-->
               <div class="text-white mx-2 small">
                 {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
               </div>
