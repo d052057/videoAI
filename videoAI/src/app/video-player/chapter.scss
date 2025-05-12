@@ -1,0 +1,21 @@
+.chapter-marker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background-color: orange;
+  transform: translateX(-50%);
+  z-index: 3;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  pointer-events: none; // Optional: lets clicks pass through
+}
+
+.chapter-marker:hover {
+  background-color: orange;
+}
+.chapter-markers {
+  pointer-events: none;
+}

@@ -1,0 +1,20 @@
+.custom-subtitle {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  font-size: 1.2rem;
+  color: white;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.5rem 1rem;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.bottom-caption {
+  bottom: 10%;
+}
+
+/* Optional: fully suppress native captions if any */
+video::cue {
+  display: none !important;
+}

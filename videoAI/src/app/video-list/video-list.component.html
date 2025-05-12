@@ -1,0 +1,35 @@
+<div class="video-list-container">
+  <h2>Videos</h2>
+
+  <ul class="video-list">
+    <li *ngFor="let video of videos"
+        class="video-list-item"
+        (mouseenter)="showThumbnail(video)"
+        (mouseleave)="hideThumbnail()">
+
+      <div class="video-title">
+        <span class="video-icon">▶</span>
+        {{ video.title }}
+        <!--<span *ngIf="video.duration" class="video-duration">{{ video.duration }}</span>-->
+      </div>
+
+      <!-- Hidden div to pre-generate thumbnails -->
+      <div class="hidden-thumbnail-generator">
+        <div videoThumbnail
+             [videoUrl]="video.url"
+             [captureTime]="2"
+             [maxWidth]="240"
+             (thumbnailGenerated)="onThumbnailGenerated(video, $event)"
+             (error)="onThumbnailError(video, $event)"></div>
+      </div>
+    </li>
+  </ul>
+
+  <!-- Floating thumbnail preview -->
+  <div class="thumbnail-preview"
+       [style.display]="activeThumbnail ? 'block' : 'none'"
+       [style.left.px]="previewPosition.x"
+       [style.top.px]="previewPosition.y">
+    <img *ngIf="activeThumbnail" [src]="activeThumbnail" alt="Video preview">
+  </div>
+</div>>

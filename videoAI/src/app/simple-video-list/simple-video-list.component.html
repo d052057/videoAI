@@ -1,0 +1,32 @@
+<div class="video-list-container">
+  <h2>My Videos</h2>
+
+  <ul class="video-list">
+    <li *ngFor="let video of videos"
+        class="video-item"
+        (mouseenter)="onMouseEnter($event, video)"
+        (mousemove)="onMouseMove($event)"
+        (mouseleave)="onMouseLeave()">
+
+      <div class="video-title">{{ video.title }}</div>
+
+      <!-- Hidden element to generate thumbnails -->
+      <div class="thumbnail-generator" style="display: none;">
+        <div videoThumbnail
+             [videoUrl]="video.url"
+             [captureTime]="1.5"
+             [maxWidth]="200"
+             (thumbnailGenerated)="setThumbnail(video, $event)"></div>
+      </div>
+    </li>
+  </ul>
+
+  <!-- Floating preview -->
+  <div *ngIf="showPreview"
+       class="thumbnail-preview"
+       [style.left.px]="previewX"
+       [style.top.px]="previewY">
+    <img [src]="currentThumbnail" alt="Video preview">
+  </div>
+</div>
+

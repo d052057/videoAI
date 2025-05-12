@@ -1,0 +1,149 @@
+<figure #figure class="video-container" @fadeInOut>
+  <video #videoPlayer class="w-100" (click)="togglePlay()">
+    <source [src]="currentVideo.src" [type]="currentVideo.type">
+    <!-- Only render tracks if they exist -->
+    <ng-container *ngIf="currentVideo.tracks">
+      <track *ngFor="let track of currentVideo.tracks"
+             [src]="track.src"
+             [kind]="track.kind"
+             [srclang]="track.srclang"
+             [label]="track.label"
+             [default]="track.default">
+    </ng-container>
+  </video>
+  <!--directive version-->
+  <audio #externalAudio [videoAudioSync]="videoPlayer" preload="auto" style="display: none"></audio>
+  <!--service version-->
+  <!--<audio #externalAudio preload="auto" style="display: none"></audio>-->
+  <!-- Hidden video for preview thumbnails -->
+  <video #thumbVideo [src]="currentVideo.src" preload="auto" muted style="display: none;"></video>
+  <canvas #thumbCanvas
+          class="position-fixed border rounded shadow"
+          width="160" height="90"
+          style="transform: translateX(-50%); pointer-events: none; display: none; z-index: 1000;">
+  </canvas>
+
+  <!-- Custom Controls -->
+  <div class="video-controls bg-dark p-2">
+    <!-- Play/Pause Button -->
+    <button class="btn btn-sm btn-dark me-2" (click)="togglePlay()">
+      <i class="bi" [ngClass]="{'bi-play-fill': !isPlaying, 'bi-pause-fill': isPlaying}"></i>
+    </button>
+    <ng-template #tooltipContainer></ng-template>
+    <!-- Progress Bar -->
+    <div #progressContainer
+         class="progress flex-grow-1 mx-2 position-relative"
+         style="height: 5px; cursor: pointer;"
+         (click)="seek($event)"
+         [progressTooltip]="true"
+         [duration]="duration"
+         [videoElement]="video"
+         [canvasElement]="thumbCanvas">
+      <div class="progress-bar bg-danger"
+           [style.width.%]="(currentTime / duration * 100)">
+      </div>
+      <div class="chapter-markers position-absolute top-0 start-0 w-100 h-100" *ngIf="currentVideo.hasChapters">
+        <button #chapterBtn *ngFor="let chapter of currentVideo.chapters"
+                class="chapter-marker"
+                [style.left.%]="(chapter.time / duration) * 100"
+                (click)="jumpToChapter(chapter.time); $event.stopPropagation()"
+                [attr.title]="chapter.title + ' (' + formatTime(chapter.time) + ')'">
+        </button>
+      </div>
+    </div>
+    <!-- Volume Control -->
+    <div class="volume-control me-2">
+      <button class="btn btn-sm btn-dark" (click)="toggleMute()">
+        <i class="bi" [ngClass]="{'bi-volume-up-fill': !isMuted, 'bi-volume-mute-fill': isMuted}"></i>
+      </button>
+      <input type="range" class="form-range" min="0" max="1" step="0.1"
+             [(ngModel)]="volume" (input)="setVolume()" style="width: 80px;">
+    </div>
+
+    <!-- Playback Speed -->
+    <div class="dropdown">
+      <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+              #speedToggleBtn
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              title="Speed">
+        <i class="bi bi-speedometer2"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li *ngFor="let s of speed">
+          <a class="dropdown-item" (click)="setPlaybackRate(s)">
+            {{s}}x
+          </a>
+        </li>
+      </ul>
+    </div>
+    <!-- Audio Language -->
+    <div class="dropdown" *ngIf="currentVideo.hasAudioTracks">
+      <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+              #speedToggleBtn
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              title="language audio">
+        <i class="bi bi-translate"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li *ngFor="let audio of currentVideo.audioTracks">
+          <a class="dropdown-item" (click)="changeAudioLanguage(audio.srclang)">
+            {{audio.label}}
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Captions Toggle Button -->
+    <div class="dropdown" *ngIf="currentVideo.hasCaptions">
+      <button class="btn btn-sm btn-dark dropdown-toggle p-1 me-2"
+              #ccToggleBtn
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              title="Closed Captions">
+        <i class="bi bi-badge-cc-fill"></i>
+      </button>
+      <ul class="dropdown-menu">
+        <li>
+          <a class="dropdown-item" (click)="toggleCaptions('off', $event)">Captions Off</a>
+        </li>
+        <li *ngFor="let track of currentVideo.tracks">
+          <a class="dropdown-item" (click)="toggleCaptions(track.srclang, $event)">
+            {{ track.label }}
+          </a>
+        </li>
+      </ul>
+    </div>
+    <!-- Forward Chapter / previous Chapter -->
+    <div *ngIf="currentVideo.hasChapters" class="d-flex align-items-center me-2">
+      <button class="btn btn-sm btn-dark me-1" (click)="goToPreviousChapter()">
+        <i class="bi bi-skip-backward"></i>
+      </button>
+      <button class="btn btn-sm btn-dark" (click)="goToNextChapter()">
+        <i class="bi bi-skip-forward"></i>
+      </button>
+    </div>
+    <!-- Fullscreen -->
+    <button class="btn btn-sm btn-dark" (click)="toggleFullscreen()">
+      <i class="bi bi-fullscreen" *ngIf="isFullscreen"></i>
+      <i class="bi bi-fullscreen-exit" *ngIf="!isFullscreen"></i>
+    </button>
+  </div>
+</figure>
+<h6 class="mb-2 text-muted">Videos List</h6>
+<div #videoListContainer class="list-group playlist-items" style="max-height: 200px; overflow-y: auto;">
+  <button *ngFor="let item of videoLibrary ; let i = index"
+          type="button"
+          class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+          [class.active]="i === currentTrackIndex()"
+          (click)="playVideo(i)">
+    <span class="me-2">{{ i + 1 }}.</span>
+    <span class="flex-grow-1 text-start">{{ item.title || 'Untitled track' }}</span>
+    <span class="badge bg-secondary rounded-pill">{{ item.duration | timeConversion }}</span>
+  </button>
+</div>
+

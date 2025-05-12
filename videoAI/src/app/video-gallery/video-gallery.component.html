@@ -1,0 +1,34 @@
+<div class="video-gallery">
+  <h2>Video Gallery</h2>
+
+  <div class="video-grid">
+    <div *ngFor="let video of videos" class="video-item">
+      <h3>{{ video.title }}</h3>
+
+      <!-- Method 1: Using with img element -->
+      <img videoThumbnail
+           [videoUrl]="video.url"
+           [captureTime]="2"
+           (thumbnailGenerated)="onThumbnailGenerated(video, $event)"
+           (error)="onThumbnailError(video, $event)"
+           alt="Video thumbnail"
+           class="video-thumbnail">
+
+      <!-- Method 2: Using with div element -->
+      <!--
+      <div class="thumbnail-container">
+        <div
+          videoThumbnail
+          [videoUrl]="video.url"
+          [captureTime]="2"
+          (thumbnailGenerated)="onThumbnailGenerated(video, $event)"
+          (error)="onThumbnailError(video, $event)"
+        ></div>
+        <img *ngIf="video.thumbnailUrl" [src]="video.thumbnailUrl" alt="Video thumbnail" class="video-thumbnail">
+      </div>
+      -->
+
+      <button (click)="playVideo(video)">Play Video</button>
+    </div>
+  </div>
+</div>
