@@ -1,5 +1,5 @@
-import {  NgClass, NgFor, NgIf } from '@angular/common';
-import { Component, ElementRef, HostListener, inject, OnInit, signal, ViewChild, viewChild, ViewContainerRef } from '@angular/core';
+import { NgClass, NgFor, NgIf } from '@angular/common';
+import { Component, ElementRef, HostListener, inject, Input, input, OnDestroy, OnInit, signal, SimpleChange, SimpleChanges, ViewChild, viewChild, ViewContainerRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AudioTrack, Chapter, speed_array, SubtitleCue, VideoSource, VideoTrack } from '../models/video.model';
 import { fadeInOut } from '../services/animations';
@@ -11,22 +11,27 @@ import { TooltipComponent } from '../tooltip/tooltip.component';
 import { from, map, of, Subject, switchMap, takeUntil } from 'rxjs';
 import { TimeConversionPipe } from '../directives/time-conversion.pipe';
 import { VideoDurationDirective } from '../directives/video-duration.directive'
+import { ChangeDetectorRef } from '@angular/core';
 declare const bootstrap: any;
 @Component({
   selector: 'app-video-player',
   templateUrl: './video-player.component.html',
   imports: [ProgressTooltipDirective, NgFor, FormsModule, NgClass, NgIf, VideoAudioSyncDirective, TimeConversionPipe],
-  styleUrls: ['./video-player.component.scss', 'captions.scss','chapter.scss'],
+  styleUrls: ['./video-player.component.scss', 'captions.scss', 'chapter.scss'],
   animations: [fadeInOut],
 })
-export class VideoPlayerComponent implements OnInit {
+export class VideoPlayerComponent implements OnInit, OnDestroy {
+  private cdr = inject(ChangeDetectorRef);
   service = inject(VideoAudioSyncService);
   eventListenerService = inject(EventListenerService);
+ 
+
   readonly videoPlayer = viewChild.required<ElementRef<HTMLVideoElement>>('videoPlayer');
   private readonly videoListContainer = viewChild.required<ElementRef>('videoListContainer');
-  get video(): HTMLVideoElement {
-    return this.videoPlayer().nativeElement;
-  }
+
+  //get video(): HTMLVideoElement | null {
+  //  return this.videoPlayer()?.nativeElement ?? null;
+  //}
   readonly ccToggleBtnRef = viewChild<ElementRef<HTMLDivElement>>('ccToggleBtn');
   private ccDropdownInstance: any;
 
@@ -50,7 +55,7 @@ export class VideoPlayerComponent implements OnInit {
   @ViewChild('tooltipContainer', { read: ViewContainerRef })
   tooltipContainer!: ViewContainerRef;
   private tooltipRef: any;
-  videoLibrary: VideoSource[] = [];
+  videoLibrary!: VideoSource[] ;
   currentVideo!: VideoSource;
   isPlaying = false;
   isMuted = false;
@@ -65,61 +70,53 @@ export class VideoPlayerComponent implements OnInit {
   speed = speed_array;
   currentTrackIndex = signal(0);
   private destroy$ = new Subject<void>();
+  private _dataSource: VideoSource[] = [];
+  public video!: HTMLVideoElement;
+  @Input()
+  set dataSource(value: VideoSource[]) {
+    if (value?.length && value !== this._dataSource) {
+      this._dataSource = value;
+      this.handleDataSourceChange();
+    }
+  }
+  get dataSource(): VideoSource[] {
+    return this._dataSource;
+  }
+ 
+  private handleDataSourceChange(): void {
+    this.videoLibrary = this._dataSource;
+    this.currentVideo = this.videoLibrary[this.currentTrackIndex()];
+    this.cdr.detectChanges();
+    const thumbVideoEl = this.thumbVideoRef()?.nativeElement;
+    if (thumbVideoEl) {
+      thumbVideoEl.src = this.currentVideo.src;
+    }
+
+    this.loadVideo();
+  }
+  get thumbVideo(): HTMLVideoElement {
+    return this.thumbVideoRef().nativeElement;
+  }
   constructor() {
     this.eventListenerService.registerKeyboardHandler(this.handleKeyboardEvent.bind(this));
   }
   ngOnInit(): void {
-    this.service.getVideo()
-      .pipe(
-        takeUntil(this.destroy$),
-        // Use switchMap to handle the async operation
-        switchMap(async (data: any) => {
-          // Here's your for loop with await
-          const result: VideoSource[] = [];
-          for (let v of data) {
-            let captionflag = false;
-            const dur = await this.getVideoDuration(v.url);
-            const tracks = v.tracks || [];
-            if (tracks.length > 0) {
-              captionflag = true;
-            }
-            result.push({
-              title: v.title,
-              src: v.url,
-              type: 'video/mp4',
-              hasCaptions: captionflag,
-              hasChapters: false,
-              hasAudioTracks: false,
-              duration: dur,
-              tracks: tracks, // caption
-              audioTracks: [] as AudioTrack[],
-              chapters: [] as Chapter[]
-            });
-          }
-          return result;
-        }),
-        // Convert the Promise result back to an Observable
-        switchMap(result => of(result))
-      )
-      .subscribe((data: VideoSource[]) => {
-        this.videoLibrary = data;
-        this.currentVideo = this.videoLibrary[this.currentTrackIndex()];
-      });
-      /*this.loadVideo();*/
   }
   ngAfterViewInit() {
-    if (this.currentVideo) {
-      this.loadVideo();
-    }
-    this.bootstrapHouseKeeper();
-    this.eventListenerService.registerHandler(this.video, 'timeupdate', this.onTimeUpdate);
-    this.eventListenerService.registerHandler(this.video, 'loadedmetadata', this.onLoadedMetadata);
-    this.eventListenerService.registerHandler(this.video, 'ended', this.onEnded);
 
-    //this.audioSync.init(
-    //  this.videoPlayer().nativeElement,
-    //  this.externalAudioRef().nativeElement
-    //);
+  }
+  onVideoReady(videoEl: HTMLVideoElement): void {
+    this.video = videoEl;
+    this.bootstrapHouseKeeper();
+    if (videoEl.readyState >= 1) {
+      // HAVE_METADATA (1) or higher means metadata is already available
+      this.onLoadedMetadata();
+    } else {
+      this.eventListenerService.registerHandler(videoEl, 'loadedmetadata', this.onLoadedMetadata);
+    }
+    this.duration = videoEl.duration; // Safe to assign now or in onLoadedMetadata
+    this.eventListenerService.registerHandler(videoEl, 'timeupdate', this.onTimeUpdate);
+    this.eventListenerService.registerHandler(videoEl, 'ended', this.onEnded);
   }
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -129,20 +126,48 @@ export class VideoPlayerComponent implements OnInit {
       this.eventListenerService.unregisterAll();
     }
   }
-  loadVideo(): void {
-    this.videoPlayer().nativeElement.load();
-    this.thumbVideoRef().nativeElement.load();
-    this.videoPlayer().nativeElement.volume = this.volume;
-    this.videoPlayer().nativeElement.playbackRate = 1;
+  //loadVideo(): void {
+  //  this.videoPlayer().nativeElement.load();
+  //  this.thumbVideoRef().nativeElement.load();
+  //  this.videoPlayer().nativeElement.volume = this.volume;
+  //  this.videoPlayer().nativeElement.playbackRate = 1;
 
-    // Enable captions if available
-    if (this.currentVideo.tracks && this.currentVideo.tracks.length > 0) {
-      const defaultTrack = this.currentVideo.tracks.find(t => t.default);
-      if (defaultTrack) {
-        this.enableCaptions(defaultTrack.srclang);
+  //  // Enable captions if available
+  //  if (this.currentVideo.tracks && this.currentVideo.tracks.length > 0) {
+  //    const defaultTrack = this.currentVideo.tracks.find(t => t.default);
+  //    if (defaultTrack) {
+  //      this.enableCaptions(defaultTrack.srclang);
+  //    }
+  //  }
+  //}
+  loadVideo(): void {
+    const video = this.videoPlayer()?.nativeElement;
+    const thumb = this.thumbVideoRef()?.nativeElement;
+
+    if (video) {
+      video.load();
+      video.volume = this.volume;
+      video.playbackRate = 1;
+
+      // Optional: manually assign duration if already known
+      this.duration = video.duration;
+
+      // Enable default captions if available
+      if (this.currentVideo.tracks?.length) {
+        const defaultTrack = this.currentVideo.tracks.find(t => t.default);
+        if (defaultTrack) {
+          this.enableCaptions(defaultTrack.srclang);
+        }
       }
     }
+
+    if (thumb) {
+      thumb.muted = true;
+      thumb.currentTime = 0;
+      thumb.load();
+    }
   }
+
   onTimeUpdate = (): void => {
     this.currentTime = this.videoPlayer().nativeElement.currentTime;
   }
@@ -160,8 +185,11 @@ export class VideoPlayerComponent implements OnInit {
     this.currentTrackIndex.set(index);
     this.currentVideo = this.videoLibrary[this.currentTrackIndex()];
     this.loadVideo();
+    setTimeout(() => {
+      this.onVideoReady(this.videoPlayer().nativeElement);
+    });
+    this.play();
   }
-
 
   togglePlay(): void {
     if (this.isPlaying) {
@@ -394,7 +422,7 @@ export class VideoPlayerComponent implements OnInit {
       selectedTrack.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }
- 
+
   private getVideoDuration(src: string): Promise<number> {
     const video = document.createElement('video');
 
@@ -421,7 +449,7 @@ export class VideoPlayerComponent implements OnInit {
   }
 
   goToNextChapter(): void {
-    const chapters = this.currentVideo.chapters || [];  
+    const chapters = this.currentVideo.chapters || [];
     const currentIndex = chapters.findIndex((chapter, i) =>
       this.currentTime >= chapter.time &&
       (i === chapters.length - 1 || this.currentTime < chapters[i + 1].time)

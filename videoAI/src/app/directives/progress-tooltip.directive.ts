@@ -22,11 +22,12 @@ export class ProgressTooltipDirective {
   @Input() duration = 0;
   @Input() videoElement!: HTMLVideoElement;
   @Input() canvasElement!: HTMLCanvasElement;
+  @Input() thumbVideo!: HTMLVideoElement;
 
   @HostListener('mousemove', ['$event'])
-  onMouseMove(event: MouseEvent): void {
+  onMouseMove(event: MouseEvent): void {   
     if (!this.duration || !this.videoElement || !this.canvasElement) return;
-
+    
     const rect = this.el.nativeElement.getBoundingClientRect();
     const pos = (event.clientX - rect.left) / rect.width;
     const hoverTime = Math.min(Math.max(pos * this.duration, 0), this.duration);
@@ -63,25 +64,30 @@ export class ProgressTooltipDirective {
     const sec = Math.floor(seconds % 60).toString().padStart(2, '0');
     return `${min}:${sec}`;
   }
-
   private drawThumbnail(time: number): void {
     const canvas = this.canvasElement;
     const ctx = canvas.getContext('2d');
-    const video = this.videoElement;
+    const video = this.thumbVideo; // use the injected thumb video
 
     if (!ctx || !video) return;
 
-    // Seek silently in a cloned video element to avoid interrupting playback
-    const tempVideo = video.cloneNode(true) as HTMLVideoElement;
-    tempVideo.muted = true;
-    tempVideo.currentTime = time;
-
-    // Ensure video data is loaded at the frame
-    tempVideo.addEventListener('seeked', () => {
+    const drawFrame = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-    }, { once: true });
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    };
 
-    tempVideo.load(); // Trigger load
+    // Wait for seek to complete before drawing
+    if (video.readyState < 2) {
+      video.addEventListener('loadeddata', () => {
+        video.currentTime = time;
+      }, { once: true });
+    } else {
+      const handleSeeked = () => {
+        drawFrame();
+        video.removeEventListener('seeked', handleSeeked);
+      };
+      video.addEventListener('seeked', handleSeeked);
+      video.currentTime = time;
+    }
   }
 }

@@ -20,5 +20,10 @@ export const routes: Routes = [
     path: 'simplevideolist',
     loadComponent: () => import('./simple-video-list/simple-video-list.component')
       .then(mod => mod.SimpleVideoListComponent)
+  },
+  {
+    path: 'playmedia',
+    loadComponent: () => import('./play-media/play-media.component')
+      .then(mod => mod.PlayMediaComponent)
   }
 ];
